@@ -160,6 +160,7 @@ const App = () => {
 
     // Perform DFS with animation steps
     const performDFS = () => {
+        const start = performance.now();
         if (!startCity || !endCity || startCity === endCity) {
             setDfsPath(null);
             setPathNodes(new Set());
@@ -272,6 +273,8 @@ const App = () => {
             setCurrentStepIndex(-1);
             resetAnimationState();
         }
+        const end = performance.now();
+        console.log(`DFS took ${end - start} ms`);
     };
 
     const resetAnimationState = () => {
@@ -291,8 +294,6 @@ const App = () => {
 
         setIsAnimating(true);
         setCurrentStepIndex(0);
-        setPathNodes(new Set());
-        setPathEdges(new Set());
     };
 
     const stopAnimation = () => {
@@ -306,6 +307,7 @@ const App = () => {
     // Animation frame handling
     useEffect(() => {
         if (isAnimating && currentStepIndex >= 0 && currentStepIndex < animationSteps.length) {
+            setPathNodes(new Set());
             const timeoutId = setTimeout(() => {
                 const step = animationSteps[currentStepIndex];
 
@@ -336,6 +338,23 @@ const App = () => {
 
                 // Update current path for animation
                 setCurrentPathAnimation(step.currentPath);
+                if (step.currentPath.length > 0) {
+                    const pathEdgesInAnimation = new Set<string>();
+                    for (let i = 0; i < step.currentPath.length - 1; i++) {
+                        const source = step.currentPath[i];
+                        const target = step.currentPath[i + 1];
+                        pathEdgesInAnimation.add(`${source}-${target}`);
+                        pathEdgesInAnimation.add(`${target}-${source}`);
+                    }
+
+                    // If we have a current edge, add it to path edges as well
+                    if (step.visitedEdge) {
+                        pathEdgesInAnimation.add(`${step.visitedEdge.source}-${step.visitedEdge.target}`);
+                        pathEdgesInAnimation.add(`${step.visitedEdge.target}-${step.visitedEdge.source}`);
+                    }
+
+                    setPathEdges(pathEdgesInAnimation);
+                }
 
                 // Set backtracking status
                 setIsBacktracking(step.isBacktrack);
@@ -348,7 +367,9 @@ const App = () => {
         } else if (isAnimating && currentStepIndex >= animationSteps.length) {
             // End of animation
             setIsAnimating(false);
+            performDFS();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAnimating, currentStepIndex, animationSteps, animationSpeed]);
 
     // Draw the graph on the canvas
@@ -407,18 +428,17 @@ const App = () => {
                 const isFinalPathEdge =
                     pathEdges.has(`${link.source}-${link.target}`) || pathEdges.has(`${link.target}-${link.source}`);
 
-                // Highlight based on priority
                 if (isCurrentEdge) {
-                    ctx.strokeStyle = isBacktracking ? "rgba(255, 165, 0, 0.9)" : "rgba(75, 0, 130, 0.9)"; // Orange for backtracking, purple for exploration
+                    ctx.strokeStyle = isBacktracking ? "rgba(255, 165, 0, 0.9)" : "#e0e322";
                     ctx.lineWidth = 3;
                 } else if (isFinalPathEdge) {
-                    ctx.strokeStyle = `rgba(0, 128, 0, 0.8)`; // Changed to green for selected/final path
+                    ctx.strokeStyle = `rgba(0, 128, 0, 0.8)`;
                     ctx.lineWidth = 3;
                 } else if (isVisitedEdge) {
-                    ctx.strokeStyle = `rgba(255, 0, 0, 0.7)`; // Changed to red for visited but rejected edges
+                    ctx.strokeStyle = `rgba(255, 0, 0, 0.7)`;
                     ctx.lineWidth = 2;
                 } else if (selectedCity === source.id || selectedCity === target.id) {
-                    ctx.strokeStyle = `rgba(0, 128, 0, ${opacity + 0.2})`; // Changed to green for selected connections
+                    ctx.strokeStyle = `rgba(0, 128, 0, ${opacity + 0.2})`;
                     ctx.lineWidth = 2;
                 } else {
                     ctx.strokeStyle = `rgba(10, 10, 10, ${opacity})`;
@@ -478,7 +498,7 @@ const App = () => {
 
             // Check if node is in final DFS path
             if (isCurrentNodeInAnimation) {
-                ctx.fillStyle = isBacktracking ? "#FFA500" : "#800080"; // Orange for backtracking, purple for current
+                ctx.fillStyle = isBacktracking ? "#FFA500" : "#e0e322"; // Orange for backtracking, purple for current
             } else if (pathNodes.has(node.id)) {
                 ctx.fillStyle = "#008000"; // Changed to green for final path nodes
             } else if (isInCurrentPath) {

@@ -64,8 +64,6 @@ export const parseData = () => {
         }
     }
 
-    console.log(connections);
-
     return { cities, connections };
 };
 
