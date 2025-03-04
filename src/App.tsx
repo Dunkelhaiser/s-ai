@@ -47,6 +47,7 @@ const App = () => {
     const [hoveredEdge, setHoveredEdge] = useState<{ source: string; target: string } | null>(null);
     const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
     const [connectedCities, setConnectedCities] = useState<Set<string>>(new Set());
+    const [time, setTime] = useState<number>(0);
 
     // DFS state
     const [startCity, setStartCity] = useState<string>("");
@@ -274,7 +275,7 @@ const App = () => {
             resetAnimationState();
         }
         const end = performance.now();
-        console.log(`DFS took ${end - start} ms`);
+        setTime(end - start);
     };
 
     const resetAnimationState = () => {
@@ -961,6 +962,9 @@ const App = () => {
                         </p>
                         <p>
                             <strong>Total Distance:</strong> {dfsPath.totalDistance} km
+                        </p>
+                        <p>
+                            <strong>Time taken:</strong> {time.toFixed(2)} ms
                         </p>
                     </div>
                 )}
