@@ -291,6 +291,8 @@ const App = () => {
 
         setIsAnimating(true);
         setCurrentStepIndex(0);
+        setPathNodes(new Set());
+        setPathEdges(new Set());
     };
 
     const stopAnimation = () => {
@@ -982,14 +984,15 @@ const App = () => {
             </div>
 
             <CreateNodeDialog isOpen={isCreatingNode} onCreate={addNewNode} onClose={() => setIsCreatingNode(false)} />
-            <AddingEdgePopup
-                sourceNodeId={sourceNodeId}
-                isOpen={isConnectingNodes && !!sourceNodeId}
-                onCancel={() => {
-                    setIsConnectingNodes(false);
-                    setSourceNodeId(null);
-                }}
-            />
+            {isConnectingNodes && !!sourceNodeId && (
+                <AddingEdgePopup
+                    sourceNodeId={sourceNodeId}
+                    onCancel={() => {
+                        setIsConnectingNodes(false);
+                        setSourceNodeId(null);
+                    }}
+                />
+            )}
             <AddEdgeDialog
                 isOpen={isCreatingEdge}
                 edgeSource={edgeSource}

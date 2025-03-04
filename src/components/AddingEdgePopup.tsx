@@ -1,7 +1,6 @@
 import { Button } from "./ui/button";
 
 interface Props {
-    isOpen: boolean;
     sourceNodeId: string | null;
     onCancel: () => void;
 }
