@@ -48,6 +48,7 @@ const App = () => {
     const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
     const [connectedCities, setConnectedCities] = useState<Set<string>>(new Set());
     const [time, setTime] = useState<number>(0);
+    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS">("DFS");
 
     // DFS state
     const [startCity, setStartCity] = useState<string>("");
@@ -278,6 +279,118 @@ const App = () => {
         setTime(end - start);
     };
 
+    const performBFS = () => {
+        const start = performance.now();
+        if (!startCity || !endCity || startCity === endCity) {
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+            return;
+        }
+
+        const adjacencyList = buildAdjacencyList();
+        const visited = new Set<string>();
+        const queue: { node: string; path: string[]; distance: number }[] = [];
+        const animSteps: AnimationStep[] = [];
+
+        queue.push({ node: startCity, path: [], distance: 0 });
+        visited.add(startCity);
+
+        animSteps.push({
+            currentNode: startCity,
+            visitedEdge: null,
+            currentPath: [],
+            isBacktrack: false,
+        });
+
+        while (queue.length > 0) {
+            const { node, path, distance } = queue.shift()!;
+            const currentPath = [...path, node];
+
+            if (node === endCity) {
+                const pathNodes = new Set<string>(currentPath);
+                const pathEdges = new Set<string>();
+
+                for (let i = 0; i < currentPath.length - 1; i++) {
+                    const source = currentPath[i];
+                    const target = currentPath[i + 1];
+                    pathEdges.add(`${source}-${target}`);
+                    pathEdges.add(`${target}-${source}`);
+                }
+
+                setPathNodes(pathNodes);
+                setPathEdges(pathEdges);
+                setDfsPath({
+                    path: currentPath,
+                    totalDistance: distance,
+                });
+
+                setAnimationSteps(animSteps);
+                setCurrentStepIndex(-1);
+                resetAnimationState();
+
+                const end = performance.now();
+                setTime(end - start);
+                return;
+            }
+
+            // Get neighbors and sort them based on traversal direction
+            const neighbors = [...adjacencyList[node]];
+            if (reverseTraversal) {
+                neighbors.reverse();
+            }
+
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor.city)) {
+                    visited.add(neighbor.city);
+
+                    // Record trying this edge as an animation step
+                    animSteps.push({
+                        currentNode: node,
+                        visitedEdge: { source: node, target: neighbor.city },
+                        currentPath: [...currentPath],
+                        isBacktrack: false,
+                    });
+
+                    // Record visit to the neighbor node
+                    animSteps.push({
+                        currentNode: neighbor.city,
+                        visitedEdge: null,
+                        currentPath: [...currentPath],
+                        isBacktrack: false,
+                    });
+
+                    queue.push({
+                        node: neighbor.city,
+                        path: currentPath,
+                        distance: distance + neighbor.distance,
+                    });
+                }
+            }
+        }
+
+        // No path found
+        setDfsPath(null);
+        setPathNodes(new Set());
+        setPathEdges(new Set());
+        setAnimationSteps([]);
+        setCurrentStepIndex(-1);
+        resetAnimationState();
+        const end = performance.now();
+        setTime(end - start);
+    };
+
+    const findPath = () => {
+        if (algorithm === "DFS") {
+            performDFS();
+        } else if (algorithm === "BFS") {
+            performBFS();
+        }
+    };
+
     const resetAnimationState = () => {
         setCurrentNode(null);
         setCurrentEdge(null);
@@ -368,7 +481,7 @@ const App = () => {
         } else if (isAnimating && currentStepIndex >= animationSteps.length) {
             // End of animation
             setIsAnimating(false);
-            performDFS();
+            findPath();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAnimating, currentStepIndex, animationSteps, animationSpeed]);
@@ -911,6 +1024,19 @@ const App = () => {
                         </select>
                     </div>
 
+                    <div>
+                        <label htmlFor="algorithm">Algorithm: </label>
+                        <select
+                            id="algorithm"
+                            value={algorithm}
+                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS")}
+                            style={{ padding: "5px", marginRight: "10px" }}
+                        >
+                            <option value="DFS">DFS</option>
+                            <option value="BFS">BFS</option>
+                        </select>
+                    </div>
+
                     <div className="mr-2.5 flex items-center gap-1">
                         <Input
                             type="checkbox"
@@ -921,7 +1047,7 @@ const App = () => {
                         <Label htmlFor="reverseTraversal">Reverse</Label>
                     </div>
 
-                    <Button onClick={performDFS}>Find Path</Button>
+                    <Button onClick={findPath}>Find Path</Button>
                 </div>
 
                 <div className="flex items-center gap-2.5">
@@ -956,7 +1082,7 @@ const App = () => {
 
                 {dfsPath && (
                     <div className="flex max-w-3xl flex-col gap-2 rounded-md bg-gray-100 p-3.5 shadow-md">
-                        <h3 className="text-lg font-medium">DFS</h3>
+                        <h3 className="text-lg font-medium">{algorithm}</h3>
                         <p>
                             <strong>Path:</strong> {dfsPath.path.join(" → ")}
                         </p>
