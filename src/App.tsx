@@ -48,7 +48,7 @@ const App = () => {
     const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
     const [connectedCities, setConnectedCities] = useState<Set<string>>(new Set());
     const [time, setTime] = useState<number>(0);
-    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS">("DFS");
+    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS" | "Dijkstra">("DFS");
 
     // DFS state
     const [startCity, setStartCity] = useState<string>("");
@@ -139,6 +139,19 @@ const App = () => {
             setConnectedCities(new Set());
         }
     }, [selectedCity, links]);
+
+    const reconstructCurrentPath = (previous: Record<string, string | null>, current: string): string[] => {
+        const path: string[] = [];
+        let currentNode: string | null = current;
+
+        while (currentNode) {
+            path.unshift(currentNode);
+            currentNode = previous[currentNode];
+            if (!currentNode) break;
+        }
+
+        return path;
+    };
 
     // Build adjacency list for DFS
     const buildAdjacencyList = () => {
@@ -396,11 +409,145 @@ const App = () => {
         setTime(end - start);
     };
 
+    const performDijkstra = () => {
+        const start = performance.now();
+        if (!startCity || !endCity || startCity === endCity) {
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+            return;
+        }
+
+        const adjacencyList = buildAdjacencyList();
+        const distances: Record<string, number> = {};
+        const previous: Record<string, string | null> = {};
+        const unvisited = new Set<string>();
+        const animSteps: AnimationStep[] = [];
+
+        // Initialize distances
+        cities.forEach((city) => {
+            distances[city] = city === startCity ? 0 : Infinity;
+            previous[city] = null;
+            unvisited.add(city);
+        });
+
+        // Record starting node visit
+        animSteps.push({
+            currentNode: startCity,
+            visitedEdge: null,
+            currentPath: [],
+            isBacktrack: false,
+        });
+
+        while (unvisited.size > 0) {
+            // Find the unvisited node with minimum distance
+            let current: string | null = null;
+            let minDistance = Infinity;
+
+            unvisited.forEach((city) => {
+                if (distances[city] < minDistance) {
+                    minDistance = distances[city];
+                    current = city;
+                }
+            });
+
+            if (current === null || distances[current] === Infinity) {
+                // No path exists
+                break;
+            }
+
+            if (current === endCity) {
+                // Found the target, break
+                break;
+            }
+
+            unvisited.delete(current);
+
+            // Check neighbors
+            adjacencyList[current].forEach((neighbor) => {
+                if (!unvisited.has(neighbor.city) || !current) return;
+
+                const potentialDistance = distances[current] + neighbor.distance;
+
+                // Record edge exploration as animation step
+                animSteps.push({
+                    currentNode: current!,
+                    visitedEdge: { source: current!, target: neighbor.city },
+                    currentPath: reconstructCurrentPath(previous, current!),
+                    isBacktrack: false,
+                });
+
+                if (potentialDistance < distances[neighbor.city]) {
+                    distances[neighbor.city] = potentialDistance;
+                    previous[neighbor.city] = current;
+
+                    // Record node update as animation step
+                    animSteps.push({
+                        currentNode: neighbor.city,
+                        visitedEdge: null,
+                        currentPath: reconstructCurrentPath(previous, neighbor.city),
+                        isBacktrack: false,
+                    });
+                }
+            });
+        }
+
+        // Reconstruct the path
+        const path: string[] = [];
+        let current = endCity;
+
+        if (previous[endCity] !== null || startCity === endCity) {
+            while (current) {
+                path.unshift(current);
+                current = previous[current]!;
+                if (!current) break;
+            }
+
+            // Create path nodes and edges sets for final highlighting
+            const nodes = new Set<string>(path);
+            const edges = new Set<string>();
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const source = path[i];
+                const target = path[i + 1];
+                edges.add(`${source}-${target}`);
+                edges.add(`${target}-${source}`);
+            }
+
+            setPathNodes(nodes);
+            setPathEdges(edges);
+            setDfsPath({
+                path,
+                totalDistance: distances[endCity],
+            });
+
+            setAnimationSteps(animSteps);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        } else {
+            // No path found
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        }
+
+        const end = performance.now();
+        setTime(end - start);
+    };
+
     const findPath = () => {
         if (algorithm === "DFS") {
             performDFS();
         } else if (algorithm === "BFS") {
             performBFS();
+        } else if (algorithm === "Dijkstra") {
+            performDijkstra();
         }
     };
 
@@ -1042,11 +1189,12 @@ const App = () => {
                         <select
                             id="algorithm"
                             value={algorithm}
-                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS")}
+                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS" | "Dijkstra")}
                             style={{ padding: "5px", marginRight: "10px" }}
                         >
                             <option value="DFS">DFS</option>
                             <option value="BFS">BFS</option>
+                            <option value="Dijkstra">Dijkstra</option>
                         </select>
                     </div>
 
