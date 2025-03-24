@@ -149,11 +149,24 @@ const App = () => {
         });
 
         links.forEach((link) => {
-            adjacencyList[link.source].push({ city: link.target, distance: link.distance });
+            // If we're in reverse traversal mode, we need to handle directed edges differently
+            if (reverseTraversal) {
+                // For directed edges in reverse mode, we add the edge in the opposite direction only
+                if (link.directed) {
+                    adjacencyList[link.target].push({ city: link.source, distance: link.distance });
+                } else {
+                    // For undirected edges, add both directions as normal
+                    adjacencyList[link.source].push({ city: link.target, distance: link.distance });
+                    adjacencyList[link.target].push({ city: link.source, distance: link.distance });
+                }
+            } else {
+                // Normal traversal mode - handle directed and undirected as before
+                adjacencyList[link.source].push({ city: link.target, distance: link.distance });
 
-            // Only add the reverse direction if the edge is not directed
-            if (!link.directed) {
-                adjacencyList[link.target].push({ city: link.source, distance: link.distance });
+                // Only add the reverse direction if the edge is not directed
+                if (!link.directed) {
+                    adjacencyList[link.target].push({ city: link.source, distance: link.distance });
+                }
             }
         });
 
