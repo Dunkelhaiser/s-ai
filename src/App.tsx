@@ -34,6 +34,9 @@ interface AnimationStep {
     visitedEdge: { source: string; target: string } | null;
     currentPath: string[];
     isBacktrack: boolean;
+    waveNodes?: string[];
+    waveEdges?: { source: string; target: string }[];
+    nextWaveNodes?: string[];
 }
 
 const App = () => {
@@ -48,7 +51,7 @@ const App = () => {
     const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
     const [connectedCities, setConnectedCities] = useState<Set<string>>(new Set());
     const [time, setTime] = useState<number>(0);
-    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS" | "Dijkstra">("DFS");
+    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS" | "Dijkstra" | "Wave">("DFS");
 
     // DFS state
     const [startCity, setStartCity] = useState<string>("");
@@ -153,7 +156,6 @@ const App = () => {
         return path;
     };
 
-    // Build adjacency list for DFS
     const buildAdjacencyList = () => {
         const adjacencyList: Record<string, { city: string; distance: number }[]> = {};
 
@@ -162,21 +164,16 @@ const App = () => {
         });
 
         links.forEach((link) => {
-            // If we're in reverse traversal mode, we need to handle directed edges differently
             if (reverseTraversal) {
-                // For directed edges in reverse mode, we add the edge in the opposite direction only
                 if (link.directed) {
                     adjacencyList[link.target].push({ city: link.source, distance: link.distance });
                 } else {
-                    // For undirected edges, add both directions as normal
                     adjacencyList[link.source].push({ city: link.target, distance: link.distance });
                     adjacencyList[link.target].push({ city: link.source, distance: link.distance });
                 }
             } else {
-                // Normal traversal mode - handle directed and undirected as before
                 adjacencyList[link.source].push({ city: link.target, distance: link.distance });
 
-                // Only add the reverse direction if the edge is not directed
                 if (!link.directed) {
                     adjacencyList[link.target].push({ city: link.source, distance: link.distance });
                 }
@@ -186,7 +183,6 @@ const App = () => {
         return adjacencyList;
     };
 
-    // Perform DFS with animation steps
     const performDFS = () => {
         const start = performance.now();
         if (!startCity || !endCity || startCity === endCity) {
@@ -205,7 +201,6 @@ const App = () => {
         const distanceMap: Record<string, number> = {};
         const animSteps: AnimationStep[] = [];
 
-        // Initialize distances
         cities.forEach((city) => {
             distanceMap[city] = 0;
         });
@@ -217,7 +212,6 @@ const App = () => {
             }
 
             visited.add(current);
-            // Record visit to this node as an animation step (no edge yet)
             animSteps.push({
                 currentNode: current,
                 visitedEdge: null,
@@ -227,7 +221,6 @@ const App = () => {
 
             currentPath.push(current);
 
-            // Get neighbors and sort them based on traversal direction
             const neighbors = [...adjacencyList[current]];
             if (reverseTraversal) {
                 neighbors.reverse();
@@ -235,7 +228,6 @@ const App = () => {
 
             for (const neighbor of neighbors) {
                 if (!visited.has(neighbor.city)) {
-                    // Record trying this edge as an animation step
                     animSteps.push({
                         currentNode: current,
                         visitedEdge: { source: current, target: neighbor.city },
@@ -252,7 +244,6 @@ const App = () => {
                 }
             }
 
-            // Record backtracking from this node
             animSteps.push({
                 currentNode: current,
                 visitedEdge: null,
@@ -267,7 +258,6 @@ const App = () => {
         dfs(startCity, endCity, [], 0);
 
         if (pathStack.length > 0) {
-            // Create path nodes and edges sets for final highlighting
             const nodes = new Set<string>();
             const edges = new Set<string>();
 
@@ -289,7 +279,6 @@ const App = () => {
                 totalDistance: distanceMap[endCity],
             });
 
-            // Set animation steps for playback
             setAnimationSteps(animSteps);
             setCurrentStepIndex(-1);
             resetAnimationState();
@@ -363,7 +352,6 @@ const App = () => {
                 return;
             }
 
-            // Get neighbors and sort them based on traversal direction
             const neighbors = [...adjacencyList[node]];
             if (reverseTraversal) {
                 neighbors.reverse();
@@ -373,7 +361,6 @@ const App = () => {
                 if (!visited.has(neighbor.city)) {
                     visited.add(neighbor.city);
 
-                    // Record trying this edge as an animation step
                     animSteps.push({
                         currentNode: node,
                         visitedEdge: { source: node, target: neighbor.city },
@@ -381,7 +368,6 @@ const App = () => {
                         isBacktrack: false,
                     });
 
-                    // Record visit to the neighbor node
                     animSteps.push({
                         currentNode: neighbor.city,
                         visitedEdge: null,
@@ -398,7 +384,6 @@ const App = () => {
             }
         }
 
-        // No path found
         setDfsPath(null);
         setPathNodes(new Set());
         setPathEdges(new Set());
@@ -427,14 +412,12 @@ const App = () => {
         const unvisited = new Set<string>();
         const animSteps: AnimationStep[] = [];
 
-        // Initialize distances
         cities.forEach((city) => {
             distances[city] = city === startCity ? 0 : Infinity;
             previous[city] = null;
             unvisited.add(city);
         });
 
-        // Record starting node visit
         animSteps.push({
             currentNode: startCity,
             visitedEdge: null,
@@ -443,7 +426,6 @@ const App = () => {
         });
 
         while (unvisited.size > 0) {
-            // Find the unvisited node with minimum distance
             let current: string | null = null;
             let minDistance = Infinity;
 
@@ -455,24 +437,20 @@ const App = () => {
             });
 
             if (current === null || distances[current] === Infinity) {
-                // No path exists
                 break;
             }
 
             if (current === endCity) {
-                // Found the target, break
                 break;
             }
 
             unvisited.delete(current);
 
-            // Check neighbors
             adjacencyList[current].forEach((neighbor) => {
                 if (!unvisited.has(neighbor.city) || !current) return;
 
                 const potentialDistance = distances[current] + neighbor.distance;
 
-                // Record edge exploration as animation step
                 animSteps.push({
                     currentNode: current!,
                     visitedEdge: { source: current!, target: neighbor.city },
@@ -484,7 +462,6 @@ const App = () => {
                     distances[neighbor.city] = potentialDistance;
                     previous[neighbor.city] = current;
 
-                    // Record node update as animation step
                     animSteps.push({
                         currentNode: neighbor.city,
                         visitedEdge: null,
@@ -495,7 +472,6 @@ const App = () => {
             });
         }
 
-        // Reconstruct the path
         const path: string[] = [];
         let current = endCity;
 
@@ -506,7 +482,6 @@ const App = () => {
                 if (!current) break;
             }
 
-            // Create path nodes and edges sets for final highlighting
             const nodes = new Set<string>(path);
             const edges = new Set<string>();
 
@@ -528,7 +503,131 @@ const App = () => {
             setCurrentStepIndex(-1);
             resetAnimationState();
         } else {
-            // No path found
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        }
+
+        const end = performance.now();
+        setTime(end - start);
+    };
+
+    const performWave = () => {
+        const start = performance.now();
+        if (!startCity || !endCity || startCity === endCity) {
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+            return;
+        }
+
+        const adjacencyList = buildAdjacencyList();
+        const visited = new Set<string>();
+        const previous: Record<string, string | null> = {};
+        const distances: Record<string, number> = {};
+        const animSteps: AnimationStep[] = [];
+
+        cities.forEach((city) => {
+            previous[city] = null;
+            distances[city] = city === startCity ? 0 : Infinity;
+        });
+
+        const queue: string[] = [startCity];
+        visited.add(startCity);
+
+        animSteps.push({
+            currentNode: startCity,
+            visitedEdge: null,
+            currentPath: [],
+            isBacktrack: false,
+        });
+
+        let foundPath = false;
+
+        while (queue.length > 0 && !foundPath) {
+            const waveSize = queue.length;
+            const currentWave = [];
+            const currentPaths = [];
+
+            for (let i = 0; i < waveSize; i++) {
+                const current = queue.shift()!;
+                currentWave.push(current);
+                currentPaths.push(reconstructCurrentPath(previous, current));
+
+                if (current === endCity) {
+                    foundPath = true;
+                    break;
+                }
+            }
+
+            const waveEdges: { source: string; target: string }[] = [];
+            const nextWaveNodes: string[] = [];
+
+            for (const current of currentWave) {
+                const neighbors = [...adjacencyList[current]];
+                if (reverseTraversal) {
+                    neighbors.reverse();
+                }
+
+                for (const neighbor of neighbors) {
+                    if (!visited.has(neighbor.city)) {
+                        visited.add(neighbor.city);
+                        previous[neighbor.city] = current;
+                        distances[neighbor.city] = distances[current] + neighbor.distance;
+
+                        waveEdges.push({ source: current, target: neighbor.city });
+                        nextWaveNodes.push(neighbor.city);
+
+                        queue.push(neighbor.city);
+                    }
+                }
+            }
+
+            if (waveEdges.length > 0) {
+                const compositePath = currentWave.length > 0 ? reconstructCurrentPath(previous, currentWave[0]) : [];
+
+                animSteps.push({
+                    currentNode: currentWave.length > 0 ? currentWave[0] : "",
+                    visitedEdge: waveEdges[0],
+                    currentPath: compositePath,
+                    isBacktrack: false,
+                    waveNodes: currentWave,
+                    waveEdges: waveEdges,
+                    nextWaveNodes: nextWaveNodes,
+                });
+            }
+        }
+
+        if (foundPath) {
+            const path = reconstructCurrentPath(previous, endCity);
+
+            const nodes = new Set<string>(path);
+            const edges = new Set<string>();
+
+            for (let j = 0; j < path.length - 1; j++) {
+                const source = path[j];
+                const target = path[j + 1];
+                edges.add(`${source}-${target}`);
+                edges.add(`${target}-${source}`);
+            }
+
+            setPathNodes(nodes);
+            setPathEdges(edges);
+            setDfsPath({
+                path,
+                totalDistance: distances[endCity],
+            });
+
+            setAnimationSteps(animSteps);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        } else {
             setDfsPath(null);
             setPathNodes(new Set());
             setPathEdges(new Set());
@@ -548,6 +647,8 @@ const App = () => {
             performBFS();
         } else if (algorithm === "Dijkstra") {
             performDijkstra();
+        } else if (algorithm === "Wave") {
+            performWave();
         }
     };
 
@@ -585,32 +686,48 @@ const App = () => {
             const timeoutId = setTimeout(() => {
                 const step = animationSteps[currentStepIndex];
 
-                // Update current node
-                setCurrentNode(step.currentNode);
-
-                // Add to visited nodes
-                setVisitedNodes((prev) => {
-                    const updated = new Set(prev);
-                    updated.add(step.currentNode);
-                    return updated;
-                });
-
-                // Update current edge if present
-                if (step.visitedEdge) {
-                    setCurrentEdge(step.visitedEdge);
-
-                    // Add to visited edges
-                    setVisitedEdges((prev) => {
+                if (step.waveNodes && step.waveEdges) {
+                    setVisitedNodes((prev) => {
                         const updated = new Set(prev);
-                        updated.add(`${step.visitedEdge!.source}-${step.visitedEdge!.target}`);
-                        updated.add(`${step.visitedEdge!.target}-${step.visitedEdge!.source}`);
+                        step.waveNodes?.forEach((node) => updated.add(node));
                         return updated;
                     });
-                } else {
+
+                    setVisitedEdges((prev) => {
+                        const updated = new Set(prev);
+                        step.waveEdges?.forEach((edge) => {
+                            updated.add(`${edge.source}-${edge.target}`);
+                            updated.add(`${edge.target}-${edge.source}`);
+                        });
+                        return updated;
+                    });
+
+                    setCurrentNode(null);
+
                     setCurrentEdge(null);
+                } else {
+                    setCurrentNode(step.currentNode);
+
+                    setVisitedNodes((prev) => {
+                        const updated = new Set(prev);
+                        updated.add(step.currentNode);
+                        return updated;
+                    });
+
+                    if (step.visitedEdge) {
+                        setCurrentEdge(step.visitedEdge);
+
+                        setVisitedEdges((prev) => {
+                            const updated = new Set(prev);
+                            updated.add(`${step.visitedEdge!.source}-${step.visitedEdge!.target}`);
+                            updated.add(`${step.visitedEdge!.target}-${step.visitedEdge!.source}`);
+                            return updated;
+                        });
+                    } else {
+                        setCurrentEdge(null);
+                    }
                 }
 
-                // Update current path for animation
                 setCurrentPathAnimation(step.currentPath);
                 if (step.currentPath.length > 0) {
                     const pathEdgesInAnimation = new Set<string>();
@@ -621,7 +738,6 @@ const App = () => {
                         pathEdgesInAnimation.add(`${target}-${source}`);
                     }
 
-                    // If we have a current edge, add it to path edges as well
                     if (step.visitedEdge) {
                         pathEdgesInAnimation.add(`${step.visitedEdge.source}-${step.visitedEdge.target}`);
                         pathEdgesInAnimation.add(`${step.visitedEdge.target}-${step.visitedEdge.source}`);
@@ -630,23 +746,19 @@ const App = () => {
                     setPathEdges(pathEdgesInAnimation);
                 }
 
-                // Set backtracking status
                 setIsBacktracking(step.isBacktrack);
 
-                // Move to next step
                 setCurrentStepIndex((prev) => prev + 1);
             }, animationSpeed);
 
             return () => clearTimeout(timeoutId);
         } else if (isAnimating && currentStepIndex >= animationSteps.length) {
-            // End of animation
             setIsAnimating(false);
             findPath();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAnimating, currentStepIndex, animationSteps, animationSpeed]);
 
-    // Draw the graph on the canvas
     useEffect(() => {
         if (!canvasRef.current || nodes.length === 0 || links.length === 0) return;
 
@@ -654,20 +766,16 @@ const App = () => {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        // Set canvas size
         canvas.width = 800;
         canvas.height = 500;
 
-        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
-        // Draw map image if loaded
         if (mapImage) {
-            // Draw the map to fit the canvas while maintaining aspect ratio
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
         }
 
@@ -681,24 +789,19 @@ const App = () => {
                 ctx.moveTo(source.x, source.y);
                 ctx.lineTo(target.x, target.y);
 
-                // Find max distance for opacity calculation
                 const maxDistance = Math.max(...links.map((l) => l.distance));
 
-                // Calculate opacity based on distance (higher distance = lighter line)
                 const opacity = 1 - (link.distance / maxDistance) * 0.8;
 
-                // Animation: determine if this is the current edge being explored
                 const isCurrentEdge =
                     currentEdge &&
                     ((currentEdge.source === link.source && currentEdge.target === link.target) ||
                         (currentEdge.target === link.source && currentEdge.source === link.target));
 
-                // Animation: determine if this edge has been visited
                 const edgeKey1 = `${link.source}-${link.target}`;
                 const edgeKey2 = `${link.target}-${link.source}`;
                 const isVisitedEdge = visitedEdges.has(edgeKey1) || visitedEdges.has(edgeKey2);
 
-                // Check if this edge is part of the final DFS path
                 const isFinalPathEdge =
                     pathEdges.has(`${link.source}-${link.target}`) || pathEdges.has(`${link.target}-${link.source}`);
 
@@ -722,15 +825,12 @@ const App = () => {
                 ctx.stroke();
 
                 if (link.directed) {
-                    // Calculate arrow points
                     const angle = Math.atan2(target.y - source.y, target.x - source.x);
                     const arrowLength = 10;
 
-                    // Position the arrow near the target but not on it
                     const arrowX = target.x - Math.cos(angle) * (target.radius + 2);
                     const arrowY = target.y - Math.sin(angle) * (target.radius + 2);
 
-                    // Draw the arrowhead
                     ctx.beginPath();
                     ctx.moveTo(arrowX, arrowY);
                     ctx.lineTo(
@@ -746,7 +846,6 @@ const App = () => {
                     ctx.fill();
                 }
 
-                // Draw distance label
                 const midX = (source.x + target.x) / 2;
                 const midY = (source.y + target.y) / 2;
                 ctx.fillStyle = "#555";
@@ -757,20 +856,15 @@ const App = () => {
 
         // Draw nodes
         nodes.forEach((node) => {
-            // Node circle
             ctx.beginPath();
             ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
 
-            // Animation: determine if this is the current node being explored
             const isCurrentNodeInAnimation = node.id === currentNode;
 
-            // Animation: determine if this node is part of the current path
             const isInCurrentPath = currentPathAnimation.includes(node.id);
 
-            // Animation: determine if this node has been visited
             const isVisitedNode = visitedNodes.has(node.id);
 
-            // Check if node is in final DFS path
             if (isCurrentNodeInAnimation) {
                 ctx.fillStyle = isBacktracking ? "#FFA500" : "#e0e322"; // Orange for backtracking, purple for current
             } else if (pathNodes.has(node.id)) {
@@ -831,21 +925,17 @@ const App = () => {
         });
 
         if (isConnectingNodes && sourceNodeId && clickedNode && sourceNodeId !== clickedNode.id) {
-            // Second click after selecting source node - prepare to add edge
             setIsConnectingNodes(false);
             openEdgeDialog(sourceNodeId, clickedNode.id);
             setSourceNodeId(null);
         } else if (clickedNode) {
             if (e.button === 0) {
-                // Left click
                 setSelectedCity(clickedNode.id === selectedCity ? null : clickedNode.id);
             } else if (e.button === 2) {
-                // Right click
                 setIsConnectingNodes(true);
                 setSourceNodeId(clickedNode.id);
             }
         } else if (e.button === 0) {
-            // Left click on empty space
             setSelectedCity(null);
             setNewNodePosition({ x, y });
             setIsCreatingNode(true);
@@ -853,7 +943,7 @@ const App = () => {
     };
 
     const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        e.preventDefault(); // Prevent default context menu
+        e.preventDefault();
 
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -870,7 +960,6 @@ const App = () => {
 
         if (clickedNode) {
             if (e.shiftKey) {
-                // Shift+Right click to delete node
                 if (confirm(`Delete city "${clickedNode.id}" and all its connections?`)) {
                     deleteNode(clickedNode.id);
                 }
@@ -879,7 +968,6 @@ const App = () => {
                 setSourceNodeId(clickedNode.id);
             }
         } else if (hoveredEdge && e.shiftKey) {
-            // Shift+Right click on edge to delete it
             const source = hoveredEdge.source;
             const target = hoveredEdge.target;
             if (confirm(`Delete connection between "${source}" and "${target}"?`)) {
@@ -889,22 +977,17 @@ const App = () => {
     };
 
     const deleteNode = (nodeId: string) => {
-        // Remove node from cities array
         setCities(cities.filter((city) => city !== nodeId));
 
-        // Remove node from nodes array
         setNodes(nodes.filter((node) => node.id !== nodeId));
 
-        // Remove all connections involving this node
         setLinks(links.filter((link) => link.source !== nodeId && link.target !== nodeId));
         setConnections(connections.filter((conn) => conn.city1 !== nodeId && conn.city2 !== nodeId));
 
-        // If the node being deleted is selected, clear selection
         if (selectedCity === nodeId) {
             setSelectedCity(null);
         }
 
-        // If the node is part of DFS path settings, reset them
         if (startCity === nodeId || endCity === nodeId) {
             setDfsPath(null);
             setPathNodes(new Set());
@@ -913,7 +996,6 @@ const App = () => {
             setCurrentStepIndex(-1);
             resetAnimationState();
 
-            // Reset start/end cities if needed
             if (startCity === nodeId) {
                 setStartCity(cities.filter((city) => city !== nodeId)[0] || "");
             }
@@ -924,7 +1006,6 @@ const App = () => {
     };
 
     const deleteEdge = (source: string, target: string) => {
-        // Remove the edge from links array
         setLinks(
             links.filter(
                 (link) =>
@@ -933,7 +1014,6 @@ const App = () => {
             )
         );
 
-        // Remove the connection from connections array
         setConnections(
             connections.filter(
                 (conn) =>
@@ -942,7 +1022,6 @@ const App = () => {
             )
         );
 
-        // Reset path if it contains this edge
         if (pathEdges.has(`${source}-${target}`) || pathEdges.has(`${target}-${source}`)) {
             setDfsPath(null);
             setPathNodes(new Set());
@@ -956,11 +1035,9 @@ const App = () => {
     const addNewNode = (name: string) => {
         if (!newNodePosition) return;
 
-        // Update cities state
         const newCities = [...cities, name];
         setCities(newCities);
 
-        // Update nodes state
         const newNodes = [
             ...nodes,
             {
@@ -974,16 +1051,13 @@ const App = () => {
         ];
         setNodes(newNodes);
 
-        // Update city coordinates
         CITY_COORDINATES[name] = [newNodePosition.x, newNodePosition.y];
 
-        // Clear creation state
         setIsCreatingNode(false);
         setNewNodePosition(null);
     };
 
     const addNewEdge = (source: string, target: string, distance: number, directed: boolean) => {
-        // Check if edge already exists
         const edgeExists = links.some(
             (link) =>
                 (link.source === source && link.target === target) ||
@@ -991,7 +1065,6 @@ const App = () => {
         );
 
         if (edgeExists) {
-            // Update existing edge
             const updatedLinks = links.map((link) => {
                 if (
                     (link.source === source && link.target === target) ||
@@ -1003,7 +1076,6 @@ const App = () => {
             });
             setLinks(updatedLinks);
 
-            // Update connections
             const updatedConnections = connections.map((conn) => {
                 if (
                     (conn.city1 === source && conn.city2 === target) ||
@@ -1015,11 +1087,9 @@ const App = () => {
             });
             setConnections(updatedConnections);
         } else {
-            // Add new edge
             const newLinks = [...links, { source, target, distance, directed }];
             setLinks(newLinks);
 
-            // Add new connection
             const newConnections = [...connections, { city1: source, city2: target, distance, directed }];
             setConnections(newConnections);
         }
@@ -1031,7 +1101,6 @@ const App = () => {
         setIsCreatingEdge(true);
     };
 
-    // Add new function for adding edge after dialog
     const confirmAddEdge = (distance: number, directed: boolean) => {
         if (isNaN(distance) || distance <= 0) {
             alert("Please enter a valid positive number for distance");
@@ -1050,7 +1119,6 @@ const App = () => {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Check if hovering over a node
         const hoveredNode = nodes.find((node) => {
             const dx = node.x - x;
             const dy = node.y - y;
@@ -1059,9 +1127,8 @@ const App = () => {
 
         setHoveredCity(hoveredNode ? hoveredNode.id : null);
 
-        // If not hovering over a node, check if hovering over an edge
         if (!hoveredNode) {
-            const threshold = 5; // Distance threshold for edge detection
+            const threshold = 5;
             let closestEdge = null;
             let minDistance = Infinity;
 
@@ -1070,12 +1137,9 @@ const App = () => {
                 const target = nodes.find((n) => n.id === link.target);
 
                 if (source && target) {
-                    // Calculate distance from point to line
                     const distance = pointToLineDistance(x, y, source.x, source.y, target.x, target.y);
 
-                    // Check if the point is within the line segment
                     if (distance < threshold && distance < minDistance) {
-                        // Check if the point is within the bounding box of the line
                         const minX = Math.min(source.x, target.x) - threshold;
                         const maxX = Math.max(source.x, target.x) + threshold;
                         const minY = Math.min(source.y, target.y) - threshold;
@@ -1189,11 +1253,12 @@ const App = () => {
                         <select
                             id="algorithm"
                             value={algorithm}
-                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS" | "Dijkstra")}
+                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS" | "Dijkstra" | "Wave")}
                             style={{ padding: "5px", marginRight: "10px" }}
                         >
                             <option value="DFS">DFS</option>
                             <option value="BFS">BFS</option>
+                            <option value="Wave">Wave</option>
                             <option value="Dijkstra">Dijkstra</option>
                         </select>
                     </div>
