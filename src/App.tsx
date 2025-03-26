@@ -51,9 +51,8 @@ const App = () => {
     const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
     const [connectedCities, setConnectedCities] = useState<Set<string>>(new Set());
     const [time, setTime] = useState<number>(0);
-    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS" | "Dijkstra" | "Wave">("DFS");
+    const [algorithm, setAlgorithm] = useState<"DFS" | "BFS" | "Dijkstra" | "Wave" | "BidirectionalWave">("DFS");
 
-    // DFS state
     const [startCity, setStartCity] = useState<string>("");
     const [endCity, setEndCity] = useState<string>("");
     const [dfsPath, setDfsPath] = useState<PathResult | null>(null);
@@ -61,7 +60,6 @@ const App = () => {
     const [pathEdges, setPathEdges] = useState<Set<string>>(new Set());
     const [reverseTraversal, setReverseTraversal] = useState<boolean>(false);
 
-    // Animation state
     const [animationSteps, setAnimationSteps] = useState<AnimationStep[]>([]);
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(-1);
     const [isAnimating, setIsAnimating] = useState<boolean>(false);
@@ -94,7 +92,6 @@ const App = () => {
         };
     }, []);
 
-    // Create graph nodes and links
     useEffect(() => {
         if (cities.length === 0 || connections.length === 0) return;
 
@@ -640,6 +637,277 @@ const App = () => {
         setTime(end - start);
     };
 
+    const performBidirectionalWave = () => {
+        const start = performance.now();
+        if (!startCity || !endCity || startCity === endCity) {
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+            return;
+        }
+
+        const adjacencyList = buildAdjacencyList();
+
+        const visitedForward = new Set<string>([startCity]);
+        const visitedBackward = new Set<string>([endCity]);
+
+        const previousForward: Record<string, string | null> = {};
+        const previousBackward: Record<string, string | null> = {};
+        const distancesForward: Record<string, number> = {};
+        const distancesBackward: Record<string, number> = {};
+
+        cities.forEach((city) => {
+            previousForward[city] = null;
+            previousBackward[city] = null;
+            distancesForward[city] = city === startCity ? 0 : Infinity;
+            distancesBackward[city] = city === endCity ? 0 : Infinity;
+        });
+
+        const queueForward: string[] = [startCity];
+        const queueBackward: string[] = [endCity];
+
+        const animSteps: AnimationStep[] = [];
+
+        animSteps.push({
+            currentNode: startCity,
+            visitedEdge: null,
+            currentPath: [startCity],
+            isBacktrack: false,
+            waveNodes: [startCity],
+            waveEdges: [],
+            nextWaveNodes: [],
+        });
+
+        animSteps.push({
+            currentNode: endCity,
+            visitedEdge: null,
+            currentPath: [endCity],
+            isBacktrack: false,
+            waveNodes: [endCity],
+            waveEdges: [],
+            nextWaveNodes: [],
+        });
+
+        let meetingNode: string | null = null;
+        let foundPath = false;
+
+        while ((queueForward.length > 0 || queueBackward.length > 0) && !foundPath) {
+            if (queueForward.length > 0) {
+                const waveSizeForward = queueForward.length;
+                const currentWaveForward: string[] = [];
+
+                for (let i = 0; i < waveSizeForward; i++) {
+                    const current = queueForward.shift()!;
+                    currentWaveForward.push(current);
+
+                    if (visitedBackward.has(current)) {
+                        meetingNode = current;
+                        foundPath = true;
+                        break;
+                    }
+                }
+
+                if (foundPath) break;
+
+                const waveEdgesForward: { source: string; target: string }[] = [];
+                const nextWaveNodesForward: string[] = [];
+
+                for (const current of currentWaveForward) {
+                    const neighbors = [...adjacencyList[current]];
+                    if (reverseTraversal) {
+                        neighbors.reverse();
+                    }
+
+                    for (const neighbor of neighbors) {
+                        if (!visitedForward.has(neighbor.city)) {
+                            visitedForward.add(neighbor.city);
+                            previousForward[neighbor.city] = current;
+                            distancesForward[neighbor.city] = distancesForward[current] + neighbor.distance;
+
+                            waveEdgesForward.push({ source: current, target: neighbor.city });
+                            nextWaveNodesForward.push(neighbor.city);
+
+                            queueForward.push(neighbor.city);
+
+                            if (visitedBackward.has(neighbor.city)) {
+                                meetingNode = neighbor.city;
+                                foundPath = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (foundPath) break;
+                }
+
+                if (waveEdgesForward.length > 0) {
+                    animSteps.push({
+                        currentNode: "",
+                        visitedEdge: null,
+                        currentPath: [],
+                        isBacktrack: false,
+                        waveNodes: currentWaveForward,
+                        waveEdges: waveEdgesForward,
+                        nextWaveNodes: nextWaveNodesForward,
+                    });
+                }
+            }
+
+            if (foundPath) break;
+
+            if (queueBackward.length > 0) {
+                const waveSizeBackward = queueBackward.length;
+                const currentWaveBackward: string[] = [];
+
+                for (let i = 0; i < waveSizeBackward; i++) {
+                    const current = queueBackward.shift()!;
+                    currentWaveBackward.push(current);
+
+                    if (visitedForward.has(current)) {
+                        meetingNode = current;
+                        foundPath = true;
+                        break;
+                    }
+                }
+
+                if (foundPath) break;
+
+                const waveEdgesBackward: { source: string; target: string }[] = [];
+                const nextWaveNodesBackward: string[] = [];
+
+                for (const current of currentWaveBackward) {
+                    const neighbors = [...adjacencyList[current]];
+                    if (reverseTraversal) {
+                        neighbors.reverse();
+                    }
+
+                    for (const neighbor of neighbors) {
+                        if (!visitedBackward.has(neighbor.city)) {
+                            visitedBackward.add(neighbor.city);
+                            previousBackward[neighbor.city] = current;
+                            distancesBackward[neighbor.city] = distancesBackward[current] + neighbor.distance;
+
+                            waveEdgesBackward.push({ source: current, target: neighbor.city });
+                            nextWaveNodesBackward.push(neighbor.city);
+
+                            queueBackward.push(neighbor.city);
+
+                            if (visitedForward.has(neighbor.city)) {
+                                meetingNode = neighbor.city;
+                                foundPath = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (foundPath) break;
+                }
+
+                if (waveEdgesBackward.length > 0) {
+                    animSteps.push({
+                        currentNode: "",
+                        visitedEdge: null,
+                        currentPath: [],
+                        isBacktrack: false,
+                        waveNodes: currentWaveBackward,
+                        waveEdges: waveEdgesBackward,
+                        nextWaveNodes: nextWaveNodesBackward,
+                    });
+                }
+            }
+        }
+
+        if (foundPath && meetingNode) {
+            const forwardPath: string[] = [];
+            let current: string | null = meetingNode;
+
+            while (current) {
+                forwardPath.unshift(current);
+                current = previousForward[current]!;
+                if (!current) break;
+            }
+
+            const backwardPath: string[] = [];
+            current = previousBackward[meetingNode];
+
+            while (current) {
+                backwardPath.push(current);
+                current = previousBackward[current]!;
+                if (!current) break;
+            }
+
+            const fullPath = forwardPath.concat(backwardPath);
+
+            let totalDistance = 0;
+            for (let i = 0; i < fullPath.length - 1; i++) {
+                const source = fullPath[i];
+                const target = fullPath[i + 1];
+
+                const link = links.find(
+                    (l) => (l.source === source && l.target === target) || (l.source === target && l.target === source)
+                );
+
+                if (link) {
+                    totalDistance += link.distance;
+                }
+            }
+
+            animSteps.push({
+                currentNode: meetingNode,
+                visitedEdge: null,
+                currentPath: [],
+                isBacktrack: false,
+                waveNodes: [meetingNode],
+                waveEdges: [],
+                nextWaveNodes: [],
+            });
+
+            animSteps.push({
+                currentNode: "",
+                visitedEdge: null,
+                currentPath: fullPath,
+                isBacktrack: false,
+                waveNodes: [],
+                waveEdges: [],
+                nextWaveNodes: [],
+            });
+
+            const nodes = new Set<string>(fullPath);
+            const edges = new Set<string>();
+
+            for (let i = 0; i < fullPath.length - 1; i++) {
+                const source = fullPath[i];
+                const target = fullPath[i + 1];
+                edges.add(`${source}-${target}`);
+                edges.add(`${target}-${source}`);
+            }
+
+            setPathNodes(nodes);
+            setPathEdges(edges);
+            setDfsPath({
+                path: fullPath,
+                totalDistance: totalDistance,
+            });
+
+            setAnimationSteps(animSteps);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        } else {
+            setDfsPath(null);
+            setPathNodes(new Set());
+            setPathEdges(new Set());
+            setAnimationSteps([]);
+            setCurrentStepIndex(-1);
+            resetAnimationState();
+        }
+
+        const end = performance.now();
+        setTime(end - start);
+    };
+
     const findPath = () => {
         if (algorithm === "DFS") {
             performDFS();
@@ -649,6 +917,8 @@ const App = () => {
             performDijkstra();
         } else if (algorithm === "Wave") {
             performWave();
+        } else if (algorithm === "BidirectionalWave") {
+            performBidirectionalWave();
         }
     };
 
@@ -1253,12 +1523,17 @@ const App = () => {
                         <select
                             id="algorithm"
                             value={algorithm}
-                            onChange={(e) => setAlgorithm(e.target.value as "DFS" | "BFS" | "Dijkstra" | "Wave")}
+                            onChange={(e) =>
+                                setAlgorithm(
+                                    e.target.value as "DFS" | "BFS" | "Dijkstra" | "Wave" | "BidirectionalWave"
+                                )
+                            }
                             style={{ padding: "5px", marginRight: "10px" }}
                         >
                             <option value="DFS">DFS</option>
                             <option value="BFS">BFS</option>
                             <option value="Wave">Wave</option>
+                            <option value="BidirectionalWave">Bidirectional Wave</option>
                             <option value="Dijkstra">Dijkstra</option>
                         </select>
                     </div>
