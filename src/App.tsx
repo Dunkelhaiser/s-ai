@@ -1591,7 +1591,7 @@ const App = () => {
                             <strong>Total Distance:</strong> {dfsPath.totalDistance} km
                         </p>
                         <p>
-                            <strong>Time taken:</strong> {time.toFixed(2)} ms
+                            <strong>Time taken:</strong> {time} ms
                         </p>
                     </div>
                 )}
