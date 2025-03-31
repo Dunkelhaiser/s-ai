@@ -37,6 +37,8 @@ interface AnimationStep {
     waveNodes?: string[];
     waveEdges?: { source: string; target: string }[];
     nextWaveNodes?: string[];
+    waveNumber?: number;
+    isBackwardWave?: boolean;
 }
 
 const App = () => {
@@ -79,6 +81,7 @@ const App = () => {
     const [isCreatingEdge, setIsCreatingEdge] = useState<boolean>(false);
     const [edgeSource, setEdgeSource] = useState<string>("");
     const [edgeTarget, setEdgeTarget] = useState<string>("");
+    const [edgeToWaveMap, setEdgeToWaveMap] = useState<Map<string, { number: number; isBackward: boolean }>>(new Map());
 
     useEffect(() => {
         const data = parseData();
@@ -514,6 +517,8 @@ const App = () => {
 
     const performWave = () => {
         const start = performance.now();
+        let waveCounter = 0;
+
         if (!startCity || !endCity || startCity === endCity) {
             setDfsPath(null);
             setPathNodes(new Set());
@@ -597,6 +602,7 @@ const App = () => {
                     waveNodes: currentWave,
                     waveEdges: waveEdges,
                     nextWaveNodes: nextWaveNodes,
+                    waveNumber: waveCounter++,
                 });
             }
         }
@@ -639,6 +645,9 @@ const App = () => {
 
     const performBidirectionalWave = () => {
         const start = performance.now();
+        let forwardWaveCounter = 0;
+        let backwardWaveCounter = 0;
+
         if (!startCity || !endCity || startCity === endCity) {
             setDfsPath(null);
             setPathNodes(new Set());
@@ -752,6 +761,7 @@ const App = () => {
                         waveNodes: currentWaveForward,
                         waveEdges: waveEdgesForward,
                         nextWaveNodes: nextWaveNodesForward,
+                        waveNumber: forwardWaveCounter++,
                     });
                 }
             }
@@ -815,6 +825,8 @@ const App = () => {
                         waveNodes: currentWaveBackward,
                         waveEdges: waveEdgesBackward,
                         nextWaveNodes: nextWaveNodesBackward,
+                        waveNumber: backwardWaveCounter++,
+                        isBackwardWave: true, // Add a flag to distinguish between forward and backward waves
                     });
                 }
             }
@@ -929,6 +941,7 @@ const App = () => {
         setVisitedEdges(new Set());
         setCurrentPathAnimation([]);
         setIsBacktracking(false);
+        setEdgeToWaveMap(new Map()); // Reset the edge-to-wave map
         stopAnimation();
     };
 
@@ -957,6 +970,23 @@ const App = () => {
                 const step = animationSteps[currentStepIndex];
 
                 if (step.waveNodes && step.waveEdges) {
+                    setEdgeToWaveMap((prev) => {
+                        const updated = new Map(prev);
+                        step.waveEdges?.forEach((edge) => {
+                            const edgeKey1 = `${edge.source}-${edge.target}`;
+                            const edgeKey2 = `${edge.target}-${edge.source}`;
+                            updated.set(edgeKey1, {
+                                number: step.waveNumber!,
+                                isBackward: !!step.isBackwardWave,
+                            });
+                            updated.set(edgeKey2, {
+                                number: step.waveNumber!,
+                                isBackward: !!step.isBackwardWave,
+                            });
+                        });
+                        return updated;
+                    });
+
                     setVisitedNodes((prev) => {
                         const updated = new Set(prev);
                         step.waveNodes?.forEach((node) => updated.add(node));
@@ -1075,7 +1105,33 @@ const App = () => {
                 const isFinalPathEdge =
                     pathEdges.has(`${link.source}-${link.target}`) || pathEdges.has(`${link.target}-${link.source}`);
 
-                if (isCurrentEdge) {
+                const waveNumber = edgeToWaveMap.get(edgeKey1) || edgeToWaveMap.get(edgeKey2);
+                const waveInfo = edgeToWaveMap.get(edgeKey1) || edgeToWaveMap.get(edgeKey2)!;
+
+                if (isVisitedEdge && waveNumber !== undefined) {
+                    const forwardWaveColors = [
+                        "rgba(255, 0, 0, 0.7)", // Red
+                        "rgba(255, 165, 0, 0.7)", // Orange
+                        "rgba(255, 255, 0, 0.7)", // Yellow
+                        "rgba(0, 0, 255, 0.7)", // Blue
+                        "rgba(220, 20, 60, 0.7)", // Crimson
+                        "rgba(255, 215, 0, 0.7)", // Gold
+                    ];
+
+                    const backwardWaveColors = [
+                        "rgba(255, 105, 180, 0.7)", // Pink
+                        "rgba(0, 255, 255, 0.7)", // Cyan
+                        "rgba(75, 0, 130, 0.7)", // Indigo
+                        "rgba(138, 43, 226, 0.7)", // BlueViolet
+                        "rgba(0, 128, 128, 0.7)", // Teal
+                        "rgba(123, 104, 238, 0.7)", // MediumSlateBlue
+                    ];
+
+                    const colorArray = waveInfo.isBackward ? backwardWaveColors : forwardWaveColors;
+                    const colorIndex = waveInfo.number % colorArray.length;
+                    ctx.strokeStyle = colorArray[colorIndex];
+                    ctx.lineWidth = 2;
+                } else if (isCurrentEdge) {
                     ctx.strokeStyle = isBacktracking ? "rgba(255, 165, 0, 0.9)" : "#e0e322";
                     ctx.lineWidth = 3;
                 } else if (isFinalPathEdge) {
@@ -1178,6 +1234,7 @@ const App = () => {
         visitedEdges,
         currentPathAnimation,
         isBacktracking,
+        edgeToWaveMap,
     ]);
 
     const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
