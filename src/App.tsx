@@ -82,6 +82,7 @@ const App = () => {
     const [edgeSource, setEdgeSource] = useState<string>("");
     const [edgeTarget, setEdgeTarget] = useState<string>("");
     const [edgeToWaveMap, setEdgeToWaveMap] = useState<Map<string, { number: number; isBackward: boolean }>>(new Map());
+    const [nodeToWaveMap, setNodeToWaveMap] = useState<Map<string, { number: number; isBackward: boolean }>>(new Map());
 
     useEffect(() => {
         const data = parseData();
@@ -941,7 +942,8 @@ const App = () => {
         setVisitedEdges(new Set());
         setCurrentPathAnimation([]);
         setIsBacktracking(false);
-        setEdgeToWaveMap(new Map()); // Reset the edge-to-wave map
+        setEdgeToWaveMap(new Map());
+        // setNodeToWaveMap(new Map());
         stopAnimation();
     };
 
@@ -983,6 +985,27 @@ const App = () => {
                                 number: step.waveNumber!,
                                 isBackward: !!step.isBackwardWave,
                             });
+                        });
+                        return updated;
+                    });
+
+                    setNodeToWaveMap((prev) => {
+                        const updated = new Map(prev);
+                        step.waveNodes?.forEach((node) => {
+                            if (!updated.has(node)) {
+                                updated.set(node, {
+                                    number: step.waveNumber!,
+                                    isBackward: !!step.isBackwardWave,
+                                });
+                            }
+                        });
+                        step.nextWaveNodes?.forEach((node) => {
+                            if (!updated.has(node)) {
+                                updated.set(node, {
+                                    number: step.waveNumber!,
+                                    isBackward: !!step.isBackwardWave,
+                                });
+                            }
                         });
                         return updated;
                     });
@@ -1191,7 +1214,30 @@ const App = () => {
 
             const isVisitedNode = visitedNodes.has(node.id);
 
-            if (isCurrentNodeInAnimation) {
+            const nodeWaveInfo = nodeToWaveMap.get(node.id);
+            if (algorithm === "BidirectionalWave" && nodeWaveInfo !== undefined) {
+                const forwardWaveColors = [
+                    "rgba(255, 0, 0, 0.7)", // Red
+                    "rgba(255, 165, 0, 0.7)", // Orange
+                    "rgba(255, 255, 0, 0.7)", // Yellow
+                    "rgba(0, 0, 255, 0.7)", // Blue
+                    "rgba(220, 20, 60, 0.7)", // Crimson
+                    "rgba(255, 215, 0, 0.7)", // Gold
+                ];
+
+                const backwardWaveColors = [
+                    "rgba(255, 105, 180, 0.7)", // Pink
+                    "rgba(0, 255, 255, 0.7)", // Cyan
+                    "rgba(75, 0, 130, 0.7)", // Indigo
+                    "rgba(138, 43, 226, 0.7)", // BlueViolet
+                    "rgba(0, 128, 128, 0.7)", // Teal
+                    "rgba(123, 104, 238, 0.7)", // MediumSlateBlue
+                ];
+
+                const colorArray = nodeWaveInfo.isBackward ? backwardWaveColors : forwardWaveColors;
+                const colorIndex = nodeWaveInfo.number % colorArray.length;
+                ctx.fillStyle = colorArray[colorIndex];
+            } else if (isCurrentNodeInAnimation) {
                 ctx.fillStyle = isBacktracking ? "#FFA500" : "#e0e322"; // Orange for backtracking, purple for current
             } else if (pathNodes.has(node.id)) {
                 ctx.fillStyle = "#008000"; // Changed to green for final path nodes
@@ -1219,6 +1265,7 @@ const App = () => {
         });
 
         ctx.restore();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         nodes,
         links,
